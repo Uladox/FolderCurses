@@ -1,0 +1,152 @@
+#include <dirent.h> 
+#include <unistd.h>
+#include <stdio.h> 
+#include <stdlib.h>
+#include <ncurses.h>
+#include <string.h>
+
+struct dirent **files;
+struct dirent **lastfile;
+struct dirent **currfile;
+DIR *d;
+int maxNameSize;
+
+int curslen(void) {
+	int i = 0;
+	struct dirent **ptr;
+	for(ptr = files; *ptr != NULL; ++ptr) {
+		++i;
+	}
+	return i;
+}
+
+struct dirent **fileslast(void)
+{
+	struct dirent **ptr;
+	for(ptr = files; *ptr != NULL; ++ptr);
+	return ptr;
+
+}
+
+void setup(void)
+{
+	files = malloc(sizeof(struct dirent *));
+	*files = NULL;
+	return;
+}
+
+void cleanup(void)
+{
+	closedir(d);
+	free(files);
+	return;
+}
+
+void loadDirectory(void)
+{
+	maxNameSize = 0;
+	setup();
+	struct dirent *dir;
+	if (d) {
+		while((dir = readdir(d)) != NULL) {
+			files = realloc(files,  (curslen() + 2) * (sizeof(struct dirent *)));
+			lastfile = fileslast();
+			*(lastfile) = dir;
+			*(++lastfile) = NULL;
+			if(strlen(dir->d_name) > maxNameSize)
+				maxNameSize = strlen(dir->d_name);
+		}	
+	}
+	maxNameSize += 5;
+	currfile = files;
+	return;
+}
+
+void changeDirectory(char *newd)
+{
+	if((chdir(newd)) == -1)
+	{
+		printw("Unable to switch");
+		return;
+	}
+	cleanup();
+	d = opendir(".");
+	loadDirectory();
+	return;
+}
+
+void navigate(void)
+{
+	int srcx, srcy;
+	int words;
+	int command;
+	struct dirent **srcRender;
+	while(1) {
+		command = getch();
+		erase();
+		if(command == 'l' && *(currfile + 1) != NULL)
+			++currfile;
+		if(command == 'h' && currfile != files)
+			--currfile;
+		if(command == 'e')
+			changeDirectory((*currfile)->d_name);
+		if(command == 'f')
+			return;
+		getmaxyx(stdscr, srcy, srcx);
+		srcRender = files;
+		words = 0;
+		while(*srcRender) {
+			int currNameSize = strlen((*srcRender)->d_name);
+			if(words + currNameSize > srcx) {
+				printw("\n", maxNameSize);
+				words = 0;
+			}
+			if(srcRender == currfile) {
+				words += maxNameSize;
+				attron(A_BOLD);
+				printw("%s", (*srcRender)->d_name);
+				attroff(A_BOLD);
+			} else {
+				words += maxNameSize;
+				printw("%s", (*srcRender)->d_name);
+			}
+			int i = 0;
+			
+			while(i + currNameSize < maxNameSize && words < srcx) {
+				printw(" ");
+				++words;
+				++i;
+			}
+			++srcRender;
+		}
+	}
+}
+int main(void)
+{
+	initscr();
+	cbreak();
+	noecho();
+	curs_set(0);
+	d = opendir(".");
+	loadDirectory();
+	navigate();
+	endwin();                  /* End curses mode    */
+
+	/*
+	struct dirent **newfiles = files;
+	while(*newfiles != NULL) {
+		printf("%s\n", (*newfiles)->d_name);
+		++newfiles;
+	}
+	changeDirectory("opencv-1.0.0");
+	newfiles = files;
+	while(*newfiles != NULL) {
+		printf("%s\n", (*newfiles)->d_name);
+		++newfiles;
+	}
+	*/
+	cleanup();
+
+	return 0;
+}
+ 
