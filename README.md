@@ -1,0 +1,4 @@
+FolderCurses
+============
+
+Ncurses for folders!
