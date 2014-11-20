@@ -12,7 +12,61 @@ struct dirent **lastfile;
 struct dirent **currfile;
 DIR *d;
 int maxNameSize;
+int currline;
+int numOfFiles;
 
+enum{allView, Upsome, Downsome, UpDownsome};
+int offScreens;
+int numOfLines(int scrx)
+{
+	return (numOfFiles * maxNameSize) / scrx;
+}
+
+int filePos(struct dirent **infile) {
+	int i = 1;
+	struct dirent **ptr;
+	for(ptr = files; ptr != infile; ++ptr) {
+		++i;
+	}
+	return i;
+}
+
+int getFileLine(int Pos, int scrx)
+{
+	(Pos * maxNameSize) / scrx;
+}
+
+int shouldRender(struct dirent **infile, int totalLines, int scry, int scrx)
+{
+	if(totalLines < scry) {
+		return 1;
+	}
+	int fileplace = getFileLine(filePos(infile), scrx);
+	int currfileoff = getFileLine(filePos(currfile), scrx);
+	int topbound = currfileoff + scry/2;
+	int bottombound = currfileoff - scry/2;
+	if(fileplace < bottombound)
+	{
+		if(offScreens == Downsome)
+			offScreens = UpDownsome;
+		else if(offScreens == allView)
+			offScreens = Upsome;
+	}
+	if(fileplace > topbound)
+	{
+		if(offScreens == Upsome)
+			offScreens = UpDownsome;
+		else if(offScreens == allView)
+			offScreens = Downsome;
+	}
+		       
+	if(fileplace > bottombound && fileplace < topbound) {
+		return 1;
+	}
+
+	return 0;
+
+}
 int curslen(void) {
 	int i = 0;
 	struct dirent **ptr;
@@ -47,6 +101,7 @@ void cleanup(void)
 void loadDirectory(void)
 {
 	maxNameSize = 0;
+	numOfFiles = 0;
 	setup();
 	struct dirent *dir;
 	if (d) {
@@ -57,6 +112,7 @@ void loadDirectory(void)
 			*(++lastfile) = NULL;
 			if(strlen(dir->d_name) > maxNameSize)
 				maxNameSize = strlen(dir->d_name);
+			++numOfFiles;
 		}	
 	}
 	maxNameSize += 5;
@@ -70,6 +126,9 @@ void changeDirectory(char *newd)
 	{
 		erase();
 		printw("Unable to switch");
+		noecho();
+		curs_set(0);
+		cbreak();
 		getch();
 		erase();
 		return;
@@ -80,69 +139,82 @@ void changeDirectory(char *newd)
 	return;
 }
 
-void bottomPanel(int srcy, int srcx)
+void bottomPanel(int scry, int scrx)
 {
 	struct passwd *pw;
 	uid_t uid;
 
-	move(srcy -1, 0);
+	move(scry -1, 0);
 	int i;
 	attron(A_STANDOUT);
-	for(i = 0; i < (srcx + 1); ++i)
+	for(i = 0; i < (scrx + 1); ++i)
 		printw("-");
 	attroff(A_STANDOUT);
 
 	uid = geteuid ();
 	pw = getpwuid (uid);
-	move(srcy, 0);
+	move(scry, 0);
 	printw(pw->pw_name);
 	if(strcmp(pw->pw_name, "root") == 0)
 		printw("#");
 	else
 		printw("$");
 	printw(" ");
+
+	move(scry -1, scrx/2);
+	if(offScreens == allView) {
+		printw("A");
+	} else if(offScreens == UpDownsome) {
+		printw("X");
+	} else if(offScreens == Upsome) {
+		printw("U");
+	} else if(offScreens == Downsome) {
+		printw("D");
+	}
 }
 
-void render(int srcy, int srcx)
+void render(int scry, int scrx)
 {
 	int words;
 	words = 0;
 	int newlinenum = 0;
 	struct stat buf;
-	struct dirent **srcRender = files;	
+	struct dirent **srcRender = files;
+	int totalLines = numOfLines(scrx);
+	offScreens = allView;
 	while(*srcRender) {
-		int currNameSize = strlen((*srcRender)->d_name);
-		if(words + currNameSize > srcx) {
-			printw("\n", maxNameSize);
-			words = 0;
-			++(newlinenum);
-		}	struct stat buf;
-		
-		stat((*srcRender)->d_name, &buf);
-	        if(!S_ISREG(buf.st_mode))
-			attron(COLOR_PAIR(1));
-		if(srcRender == currfile) {
-			words += maxNameSize;
-			attron(A_BOLD | A_UNDERLINE);
-			printw("%s", (*srcRender)->d_name);
-			attroff(A_BOLD | A_UNDERLINE);
-		} else {
-			words += maxNameSize;
-			printw("%s", (*srcRender)->d_name);
-		}
-		int i = 0;	
-		while(i + currNameSize < maxNameSize && words < srcx) {
-			printw(" ");
-			++(words);
-			++i;
+		if(shouldRender(srcRender, totalLines, scry, scrx)) {
+			int currNameSize = strlen((*srcRender)->d_name);
+			if(words + maxNameSize > scrx) {
+				printw("\n", maxNameSize);
+				words = 0;
+				++newlinenum;
+			}
+			stat((*srcRender)->d_name, &buf);
+			if(!S_ISREG(buf.st_mode))
+				attron(COLOR_PAIR(1));
+			if(srcRender == currfile) {
+				words += maxNameSize;
+				attron(A_BOLD | A_UNDERLINE);
+				printw("%s", (*srcRender)->d_name);
+				attroff(A_BOLD | A_UNDERLINE);
+			} else {
+				words += maxNameSize;
+				printw("%s", (*srcRender)->d_name);
+			}
+			int i = 0;	
+			while(i + currNameSize < maxNameSize && words < scrx) {
+				printw(" ");
+				++i;
+			}
 		}
 		++srcRender;
 		attroff(COLOR_PAIR(1));
 	}
-	bottomPanel(srcy, srcx);
+	bottomPanel(scry, scrx);
 }
 
-void insertShell(int srcy, int srcx)
+void insertShell(int scry, int scrx)
 {
 
 	struct passwd *pw;
@@ -152,19 +224,24 @@ void insertShell(int srcy, int srcx)
 	echo();
 	curs_set(1);
 	nocbreak();
-	move(srcy, strlen(pw->pw_name) + 2);
+	move(scry, strlen(pw->pw_name) + 2);
 	
 	char* shcomm = malloc(2);
 	*shcomm = getch();
+	char newchar;
 	if(*shcomm != '\n') {
 		*(shcomm + 1) = '\0';
 		char *shlastchar = shcomm;
-		while(*shlastchar != '\n') {
+		while((newchar = getch()) != '\n') {
 			shcomm = realloc(shcomm, strlen(shcomm) + 2);
-			*(++shlastchar) = getch();
+			*(++shlastchar) = newchar;
 			*(shlastchar + 1) = '\0';
 		}
-		system(shcomm);
+		if(strncmp(shcomm, "cd ", 3) == 0) {
+			changeDirectory(shcomm + 3);
+		} else {
+			system(shcomm);
+		}
 	}
         free(shcomm);
 	noecho();
@@ -178,24 +255,30 @@ void insertShell(int srcy, int srcx)
 void navigate(void)
 {
 	int command;
-	int srcy, srcx;
+	int scry, scrx;
 	while(1) {
-		getmaxyx(stdscr, srcy, srcx);
-		--srcy;
-		--srcx;
-		render(srcy, srcx);
+		getmaxyx(stdscr, scry, scrx);
+		--scry;
+		--scrx;
+		render(scry, scrx);
 		command = getch();
 		
 		if(command == 'l' && *(currfile + 1) != NULL)
 			++currfile;
 		if(command == 'h' && currfile != files)
 			--currfile;
+		if(command == 'a')
+			currfile = lastfile - 1;
+		if(command == 'o')
+			changeDirectory("..");
 		if(command == 'e')
 			changeDirectory((*currfile)->d_name);
+		if(command == 'r')
+			changeDirectory(".");
 		if(command == 'f')
 			return;
 		if(command == 'i')
-			insertShell(srcy, srcx);
+			insertShell(scry, scrx);
 		erase();
 
 	}

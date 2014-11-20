@@ -2,14 +2,11 @@
 #include <unistd.h>
 #include <stdio.h> 
 #include <stdlib.h>
-#include <ncurses.h>
-#include <string.h>
 
 struct dirent **files;
 struct dirent **lastfile;
 struct dirent **currfile;
 DIR *d;
-int maxNameSize;
 
 int curslen(void) {
 	int i = 0;
@@ -44,7 +41,6 @@ void cleanup(void)
 
 void loadDirectory(void)
 {
-	maxNameSize = 0;
 	setup();
 	struct dirent *dir;
 	if (d) {
@@ -53,11 +49,8 @@ void loadDirectory(void)
 			lastfile = fileslast();
 			*(lastfile) = dir;
 			*(++lastfile) = NULL;
-			if(strlen(dir->d_name) > maxNameSize)
-				maxNameSize = strlen(dir->d_name);
 		}	
 	}
-	maxNameSize += 5;
 	currfile = files;
 	return;
 }
@@ -66,7 +59,7 @@ void changeDirectory(char *newd)
 {
 	if((chdir(newd)) == -1)
 	{
-		printw("Unable to switch");
+		printf("Unable to switch");
 		return;
 	}
 	cleanup();
@@ -77,61 +70,27 @@ void changeDirectory(char *newd)
 
 void navigate(void)
 {
-	int srcx, srcy;
-	int words;
-	int command;
-	struct dirent **srcRender;
+	
 	while(1) {
-		command = getch();
-		erase();
+		char command = getchar();
+		while(command == '\n')
+			command = getchar();
+		
 		if(command == 'l' && *(currfile + 1) != NULL)
 			++currfile;
 		if(command == 'h' && currfile != files)
 			--currfile;
 		if(command == 'e')
 			changeDirectory((*currfile)->d_name);
-		if(command == 'f')
-			return;
-		getmaxyx(stdscr, srcy, srcx);
-		srcRender = files;
-		words = 0;
-		while(*srcRender) {
-			int currNameSize = strlen((*srcRender)->d_name);
-			if(words + currNameSize > srcx) {
-				printw("\n", maxNameSize);
-				words = 0;
-			}
-			if(srcRender == currfile) {
-				words += maxNameSize;
-				attron(A_BOLD);
-				printw("%s", (*srcRender)->d_name);
-				attroff(A_BOLD);
-			} else {
-				words += maxNameSize;
-				printw("%s", (*srcRender)->d_name);
-			}
-			int i = 0;
-			
-			while(i + currNameSize < maxNameSize && words < srcx) {
-				printw(" ");
-				++words;
-				++i;
-			}
-			++srcRender;
-		}
+		printf("%s", (*currfile)->d_name);
 	}
 }
 int main(void)
 {
-	initscr();
-	cbreak();
-	noecho();
-	curs_set(0);
+
 	d = opendir(".");
 	loadDirectory();
 	navigate();
-	endwin();                  /* End curses mode    */
-
 	/*
 	struct dirent **newfiles = files;
 	while(*newfiles != NULL) {
