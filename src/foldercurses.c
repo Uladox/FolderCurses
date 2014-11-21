@@ -31,41 +31,48 @@ int filePos(struct dirent **infile) {
 	return i;
 }
 
-int goesIntoNum(int large, int small)
+int goesIntoNum(int large, int small, int offset)
 {
 	int i;
-	for(i = 0; i + small < large; i += small);
+	for(i = 0; i + small + offset <= large; i += small);
 	return i/small;
 }
 
 int filesPerLine(int scrx)
 {
-	return goesIntoNum(scrx, maxNameSize);
+	return goesIntoNum(scrx, maxNameSize, 1);
 }
 
 int getFileLine(int Pos, int scrx)
 {
-	
-	return (Pos * maxNameSize) / scrx;
+	int lineFiles = filesPerLine(scrx);
+	int rtrnval = goesIntoNum(Pos, lineFiles, 0);
+	if((Pos % lineFiles) != 0)
+		++rtrnval;
+	return rtrnval;
 }
 
 int shouldRender(struct dirent **infile, int totalLines, int scry, int scrx)
 {
-	if(totalLines < scry) {
-		return 1;
-	}
-	int fileplace = getFileLine(filePos(infile), scrx);
 	int currfileoff = getFileLine(filePos(currfile), scrx);
+	int fileplace = getFileLine(filePos(infile), scrx);
+	if(currfileoff < scry - 2 && fileplace < scry - 2) {
+		return 1;
+	} else if(currfileoff < scry - 2) {
+		if(offScreens == allView)
+			offScreens = Downsome;
+		return 0;
+	}
 	int topbound = currfileoff + scry/2;
-	int bottombound = 1 + currfileoff - scry/2;
-	if(fileplace < bottombound)
+	int bottombound = currfileoff - scry/2;
+	if(fileplace < bottombound + 1)
 	{
 		if(offScreens == Downsome)
 			offScreens = UpDownsome;
 		else if(offScreens == allView)
 			offScreens = Upsome;
 	}
-	if(fileplace > topbound)
+	if(fileplace > topbound - 1)
 	{
 		if(offScreens == Upsome)
 			offScreens = UpDownsome;
@@ -128,7 +135,7 @@ void loadDirectory(void)
 			++numOfFiles;
 		}	
 	}
-	maxNameSize += 5;
+	maxNameSize += 2;
 	currfile = files;
 	return;
 }
@@ -157,10 +164,10 @@ void bottomPanel(int scry, int scrx)
 	struct passwd *pw;
 	uid_t uid;
 
-	move(scry -1, 0);
+	move(scry -2, 0);
 	int i;
 	attron(A_STANDOUT);
-	for(i = 0; i < (scrx + 1); ++i)
+	for(i = 0; i < scrx; ++i)
 		printw("-");
 	attroff(A_STANDOUT);
 
@@ -174,7 +181,7 @@ void bottomPanel(int scry, int scrx)
 		printw("$");
 	printw(" ");
 
-	move(scry -1, scrx/2);
+	move(scry -2, scrx/2);
 	if(offScreens == allView) {
 		printw("A");
 	} else if(offScreens == UpDownsome) {
@@ -199,7 +206,7 @@ void render(int scry, int scrx)
 		if(shouldRender(srcRender, totalLines, scry, scrx)) {
 			int currNameSize = strlen((*srcRender)->d_name);
 			if(words + maxNameSize > scrx) {
-				printw("\n", maxNameSize);
+				printw("\n");
 				words = 0;
 				++newlinenum;
 			}
@@ -224,7 +231,7 @@ void render(int scry, int scrx)
 		++srcRender;
 		attroff(COLOR_PAIR(1));
 	}
-//	bottomPanel(scry, scrx);
+	bottomPanel(scry, scrx);
 }
 
 void insertShell(int scry, int scrx)
@@ -271,8 +278,6 @@ void navigate(void)
 	int scry, scrx;
 	while(1) {
 		getmaxyx(stdscr, scry, scrx);
-		--scry;
-		--scrx;
 		render(scry, scrx);
 		command = getch();
 		
