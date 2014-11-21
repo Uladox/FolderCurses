@@ -19,7 +19,7 @@ enum{allView, Upsome, Downsome, UpDownsome};
 int offScreens;
 int numOfLines(int scrx)
 {
-	return (numOfFiles * maxNameSize) / scrx;
+	return (scrx/maxNameSize) * numOfFiles;
 }
 
 int filePos(struct dirent **infile) {
@@ -31,9 +31,22 @@ int filePos(struct dirent **infile) {
 	return i;
 }
 
+int goesIntoNum(int large, int small)
+{
+	int i;
+	for(i = 0; i + small < large; i += small);
+	return i/small;
+}
+
+int filesPerLine(int scrx)
+{
+	return goesIntoNum(scrx, maxNameSize);
+}
+
 int getFileLine(int Pos, int scrx)
 {
-	(Pos * maxNameSize) / scrx;
+	
+	return (Pos * maxNameSize) / scrx;
 }
 
 int shouldRender(struct dirent **infile, int totalLines, int scry, int scrx)
@@ -44,7 +57,7 @@ int shouldRender(struct dirent **infile, int totalLines, int scry, int scrx)
 	int fileplace = getFileLine(filePos(infile), scrx);
 	int currfileoff = getFileLine(filePos(currfile), scrx);
 	int topbound = currfileoff + scry/2;
-	int bottombound = currfileoff - scry/2;
+	int bottombound = 1 + currfileoff - scry/2;
 	if(fileplace < bottombound)
 	{
 		if(offScreens == Downsome)
@@ -203,7 +216,7 @@ void render(int scry, int scrx)
 				printw("%s", (*srcRender)->d_name);
 			}
 			int i = 0;	
-			while(i + currNameSize < maxNameSize && words < scrx) {
+			while(i + currNameSize < maxNameSize) {
 				printw(" ");
 				++i;
 			}
@@ -211,7 +224,7 @@ void render(int scry, int scrx)
 		++srcRender;
 		attroff(COLOR_PAIR(1));
 	}
-	bottomPanel(scry, scrx);
+//	bottomPanel(scry, scrx);
 }
 
 void insertShell(int scry, int scrx)
